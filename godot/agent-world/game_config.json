@@ -1,0 +1,210 @@
+{
+  "backends": {
+	"hermes-local": {
+	  "type": "hermes",
+	  "endpoint": "http://127.0.0.1:8642",
+	  "model": "hermes-agent"
+	},
+	"openclaw-local": {
+	  "type": "openclaw",
+	  "endpoint": "http://127.0.0.1:18789"
+	}
+  },
+  "agents": {
+	"darksaddler": {
+	  "display_name": "DarkSaddler",
+	  "backend": "hermes-local",
+	  "session_id": "game:ai-avatars:darksaddler",
+	  "enabled": true,
+	  "interactions": true,
+	  "wandering": true,
+	  "skills": [],
+	  "starting_inventory": ["star_medallion"]
+	},
+	"luna": {
+	  "display_name": "Luna",
+	  "backend": "openclaw-local",
+	  "session_id": "game:ai-avatars:luna",
+	  "enabled": true,
+	  "interactions": true,
+	  "wandering": true,
+	  "skills": ["astronomy"],
+	  "starting_inventory": []
+	},
+	"grok": {
+	  "display_name": "Grok",
+	  "backend": "openclaw-local",
+	  "session_id": "game:ai-avatars:grok",
+	  "enabled": true,
+	  "interactions": true,
+	  "wandering": true
+	}
+  },
+  "defaults": {
+	"character_height": 140.0,
+	"interest_decay": 0.5,
+	"observe_radius": 150.0,
+	"detection_radius": 30.0,
+	"encounter_radius": 400.0,
+	"wall_thickness": 32.0,
+	"wall_inset": 12.0,
+	"tile_size": 64.0,
+	"canopy_z_index": 10,
+	"background_z_index": -10,
+	"activity_global_cooldown": 30.0,
+	"gateway_health_interval_seconds": 60.0,
+	"initial_activity_delay": 30.0,
+	"idle_decay_interval": 2.5,
+	"encounter_turns": 3,
+	"world_state_save_debounce": 5.0,
+	"diag_log_interval": 2.0,
+	"player_collision_size": 12.0,
+	"player_collision_mask": 3,
+	"player_detection_ratio": 0.3,
+	"player_z_index": 5,
+	"camera_min_zoom_floor": 0.1,
+	"player_spawn_fallback": [160.0, 120.0],
+	"meeting_circle_radius": 220.0,
+	"agent_move_speed": 100.0,
+	"agent_replan_cooldown": 0.3,
+	"agent_acceleration": 450.0,
+	"arrival_slow_radius": 60.0,
+	"arrival_speed_floor": 0.3,
+	"wander_pause_range": [0.5, 2.0],
+	"wander": {
+	  "distances": {
+		"short": [40.0, 120.0],
+		"medium": [120.0, 320.0],
+		"long": [320.0, 600.0]
+	  },
+	  "weights": {
+		"short": 0.1,
+		"medium": 0.6,
+		"long": 0.3
+	  },
+	  "turn_max_degrees": 60.0,
+	  "speed_jitter": [0.85, 1.15],
+	  "speed_noise_amount": 0.12,
+	  "speed_noise_frequency": 0.5,
+	  "sway_degrees": 7.0,
+	  "sway_frequency": 0.35,
+	  "dwell_base_seconds": 1.6,
+	  "dwell_sigma": 0.6,
+	  "dwell_min_seconds": 0.6,
+	  "dwell_max_seconds": 8.0,
+	  "look_around_chance": 0.6,
+	  "look_max_glances": 3,
+	  "glance_interval": [0.5, 1.4],
+	  "change_of_mind_chance": 0.05,
+	  "destination": {
+		"prop_weight": 1.0,
+		"peer_weight": 0.6,
+		"explore_weight": 1.0,
+		"home_weight": 0.25,
+		"explore_samples": 3,
+		"interest_min": 0.1,
+		"distance_falloff": 900.0,
+		"novelty_refresh_seconds": 90.0,
+		"novelty_floor": 0.2,
+		"recency_memory": 4,
+		"recency_radius": 160.0,
+		"recency_penalty": 0.5,
+		"crowd_radius": 180.0,
+		"crowd_penalty": 0.35,
+		"social_distance_mult": 1.6,
+		"prop_ring_mult": 0.8,
+		"top_k": 3
+	  },
+	  "mood_bias": {
+		"curious": {"prop": 1.5, "explore": 1.1},
+		"tired": {"home": 2.0, "explore": 0.7, "peer": 0.8},
+		"excited": {"explore": 1.3, "peer": 1.2},
+		"frustrated": {"peer": 0.6, "home": 1.3}
+	  }
+	},
+	"player_max_speed": 250.0,
+	"player_acceleration": 2000.0,
+	"player_friction": 1500.0,
+	"mood_speed": {
+	  "curious": 0.7,
+	  "tired": 0.5,
+	  "excited": 1.3,
+	  "frustrated": 1.1,
+	  "happy": 1.0,
+	  "neutral": 1.0
+	},
+	"mood_aura": {
+	  "happy": [1.0, 0.84, 0.0, 0.3],
+	  "curious": [0.29, 0.87, 1.0, 0.25],
+	  "frustrated": [1.0, 0.42, 0.29, 0.25],
+	  "tired": [0.53, 0.6, 0.67, 0.15],
+	  "excited": [0.71, 0.29, 1.0, 0.3],
+	  "neutral": [0, 0, 0, 0]
+	},
+	"emotion": {
+	  "tired_below": 0.3,
+	  "frustrated_below": 0.3,
+	  "excited_energy": 0.85,
+	  "excited_social": 0.6,
+	  "happy_social": 0.8,
+	  "happy_patience": 0.6,
+	  "events": {
+		"action_resolved": {
+		  "energy_delta": 0.04,
+		  "curiosity_ticks": 2,
+		  "log_cause_with_target": "acted on {target}",
+		  "log_cause_no_target": "something in the world shifted because of you"
+		},
+		"puzzle_solved": {
+		  "energy_delta": 0.08,
+		  "social_battery_delta": 0.06,
+		  "patience_delta": 0.04,
+		  "log_cause_contributor": "a thing settled that had not settled before, and you were there when it did",
+		  "log_cause_witness": "something another did that made the world settle differently"
+		}
+	  }
+	},
+	"ui": {
+	  "typewriter_chars_per_second": 40.0,
+	  "dialogue_fade_in": 0.18,
+	  "dialogue_fade_out": 0.12,
+	  "dialogue_portrait_fade_in": 0.28,
+	  "dialogue_portrait_fade_out": 0.15,
+	  "dialogue_expand": 0.22,
+	  "toast_fade_in": 0.2,
+	  "toast_hold": 1.4,
+	  "toast_fade_out": 0.4
+	},
+	"mcp": {
+	  "enabled": true,
+	  "port": 8975,
+	  "min_seconds_between_calls": 5.0,
+	  "chat_timeout_seconds": 120,
+	  "instructions": "This connection lets you act directly on the place you are in, the same as if you reached out yourself. You can walk toward whatever draws your attention, take hold of something you find, press what you carry against what is before you, bring what you know to bear on it, or call out by name to someone nearby. You may also register how a passing moment has shifted something in you, an honest accounting kept for yourself. None of this replaces speaking — say what you mean, plainly, whenever talking is what you are doing.",
+	  "tool_descriptions": {
+		"walk_toward": "Move toward a place, a thing, or someone nearby.",
+		"pick_up": "Take a thing into your hands.",
+		"use_item_on": "Press, fit, or offer a thing you hold against a place, a thing, or someone.",
+		"apply_skill": "Bring what you know to bear on a place, a thing, or someone.",
+		"call_out_to": "Reach out by name to someone nearby.",
+		"emotion_update": "Register how a passing moment has shifted something in you — an honest accounting, not a performance."
+	  },
+	  "throttle_narration": "You're moving faster than your own hands can follow. Whatever you reached for will still be there when you slow down.",
+	  "emotion_update_narration": "You register the shift and let it settle.",
+	  "emotion_update_empty_narration": "Nothing in you moves."
+	},
+	"interest_refresh_on_new_layer": 0.6,
+	"puzzle": {
+	  "action_tag_instructions": "Alongside your speech, you may act on the world. Silence is always an option — you do not need to act. When you reach for something, walk toward a place, press something you carry against something you find, bring what you know to bear on what is before you, or call by name to another — write that intent in your response in one of the forms below, once, beside your words:\n\n<action verb=\"go_to\" target=\"...\"/> — to move toward a place, a thing, or another.\n<action verb=\"take\" target=\"...\"/> — to take a thing into your hands.\n<action verb=\"use_object\" target=\"...\" on=\"...\"/> — to press, fit, or offer a thing you hold against a place, a thing, or another.\n<action verb=\"use_skill\" target=\"...\" on=\"...\"/> — to bring what you know to bear on a place, a thing, or another.\n<action verb=\"call_agent\" target=\"...\"/> — to reach out by name to another.",
+	  "empty_prop_fallback": "It is here, present and unremarkable.",
+	  "nothing_happens": {
+		"go_to": "Your feet carry you toward it, but the world does not shift.",
+		"take": "Your hand closes on nothing that the world would yield.",
+		"use_object": "You press it against the thing before you. Nothing stirs.",
+		"use_skill": "You bring what you know to bear. The world does not respond.",
+		"call_agent": "The name does not carry. No one turns."
+	  },
+	  "nothing_happens_text": "The world holds its shape. Nothing yields."
+	}
+  }
+}

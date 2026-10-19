@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.env
+.ruff_cache/
+.pytest_cache/
+data/memory/
+.godot-mcp/
+assets/
+.claude/
+design/
+docs/
+production/
