@@ -1,0 +1,99 @@
+{
+ "name": "Mini fixture: Ledge Falls",
+ "size": [1280, 720],
+ "period": 9.0,
+ "look": {
+  "ambient": [44, 52, 104],
+  "moon": {"color": [150, 185, 255], "energy": 0.5, "height": 0.6},
+  "moon_reflect": [420, 250],
+  "rays": 0.24,
+  "haze": [0.1, 0.13, 0.27],
+  "falling": [1.0, 0.62, 0.82],
+  "dof": 0.0
+ },
+ "ground": {
+  "seed": 21, "base": "grass", "moss": 0.68, "top_shadow": 60, "tufts": 24000, "leaves": 0.0016,
+  "leaf_pals": ["M2", "M3", "P1", "M1", "G1"], "flower_rate": 0.0022,
+  "flowers": [["M3", [255, 150, 210], 0.3], ["P0", null, 0], ["N10", [120, 170, 255], 0.45]]
+ },
+ "cliff": {
+  "poly": [[-4, -4], [600, -4], [590, 40], [560, 100], [500, 140], [420, 160], [300, 168], [180, 166], [60, 170], [-4, 172]],
+  "height": 40,
+  "stairs": [110, 150],
+  "fall": [380, 402]
+ },
+ "water": {
+  "ponds": [[[350, 204], [400, 200], [450, 206], [486, 226], [492, 256], [470, 280], [420, 290], [370, 284], [336, 262], [332, 230]]],
+  "streams": [
+   {"pts": [[470, -4], [450, 40], [420, 90], [400, 130], [392, 162]], "width": 14},
+   {"pts": [[470, 276], [520, 320], [560, 380], [578, 440], [580, 500], [570, 580], [586, 660], [592, 724]], "width": 22}
+  ],
+  "crossings": [[550, 466, 612, 496]]
+ },
+ "paths": [
+  {"pts": [[900, 250], [1000, 272], [1040, 340], [1000, 410], [900, 432], [800, 410], [760, 340], [800, 272], [900, 250]], "width": 16},
+  {"pts": [[900, 724], [904, 640], [896, 540], [900, 432]], "width": 18},
+  {"pts": [[760, 340], [700, 400], [650, 460], [610, 481]], "width": 14},
+  {"pts": [[552, 481], [480, 470], [380, 430], [260, 380], [170, 300], [136, 240], [130, 205]], "width": 14},
+  {"pts": [[130, 166], [140, 120], [200, 80], [300, 60]], "width": 12}
+ ],
+ "plazas": [
+  {"at": [900, 340], "r": [70, 44], "broken": 0.2, "runes": [120, 220, 255], "groove_pal": "T4", "glyph_pal": "T7"}
+ ],
+ "moon_gap": [720, 90],
+ "fog": {"water": 0.45, "top": 0.6, "bottom": 0.45, "clear": [{"at": [1100, 540], "r": [50, 30]}]},
+ "trees": [
+  {"species": "pine", "at": [60, 100], "seed": 31, "scale": 1.0},
+  {"species": "pine", "at": [250, 130], "seed": 32, "scale": 0.9},
+  {"species": "oak", "at": [1120, 170], "seed": 15, "scale": 1.0},
+  {"species": "blossom", "at": [700, 230], "seed": 41, "scale": 1.0},
+  {"species": "willow", "at": [300, 520], "seed": 44, "scale": 1.0},
+  {"species": "oak", "at": [1180, 640], "seed": 19, "scale": 1.1}
+ ],
+ "props": [
+  {"kind": "hokora", "at": [900, 330]},
+  {"kind": "stone_lantern", "at": [850, 350], "energy": 0.7, "radius": 56},
+  {"kind": "stone_lantern", "at": [950, 350], "energy": 0.7, "radius": 56},
+  {"kind": "bridge", "at": [581, 481], "span": 46, "width": 22},
+  {"kind": "campfire", "at": [1100, 520], "seats": [[-26, -6, 30]]},
+  {"kind": "lantern", "at": [630, 505]},
+  {"kind": "signpost", "at": [520, 502]},
+  {"kind": "rock", "at": [1000, 600], "r": [9, 6]},
+  {"kind": "log", "at": [300, 620], "length": 44, "radius": 5},
+  {"kind": "shrub", "at": [200, 470], "r": [16, 11], "flowers": "pink"}
+ ],
+ "lights": [
+  {"kind": "moon_pool", "at": [900, 340], "color": [170, 200, 255], "energy": 1.3, "radius": 140, "z": 60},
+  {"kind": "firefly", "at": [330, 560], "color": [255, 214, 120], "energy": 0.7, "radius": 30, "z": 12, "phase": 0.0},
+  {"kind": "firefly", "at": [1150, 330], "color": [255, 214, 120], "energy": 0.7, "radius": 30, "z": 12, "phase": 2.1},
+  {"kind": "point", "at": [480, 300], "color": [120, 200, 255], "energy": 0.6, "radius": 60, "z": 16}
+ ],
+ "walker": {
+  "start": [900, 700],
+  "radius": 6,
+  "goals": {
+   "shrine": [900, 392],
+   "bridge west": [540, 481],
+   "plateau via stairs": [200, 100],
+   "pond shore": [420, 306],
+   "camp": [1100, 560],
+   "west field": [60, 420],
+   "east edge": [1250, 360]
+  }
+ },
+ "game": {
+  "id": "mini",
+  "day": false,
+  "spawn": {"player": [900, 680], "agents": [900, 600]},
+  "zones": [
+   {"name": "Shrine Plaza", "rect": [790, 260, 220, 170]},
+   {"name": "High Ledge", "rect": [0, 0, 560, 160]}
+  ],
+  "landmarks": [
+   {"name": "Moonlit Hokora", "at": [900, 330], "tall": true},
+   {"name": "Ledge Falls", "at": [391, 182], "tall": false}
+  ],
+  "props": {"prop_1": {"at": [1100, 516], "size": [40, 24], "collision": true}},
+  "extras": [{"module": "tests/fixtures/worldgen/mini_extras.py", "fn": "standing_stone", "at": [1180, 420]}]
+ }
+}

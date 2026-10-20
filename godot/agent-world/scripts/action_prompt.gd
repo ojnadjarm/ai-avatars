@@ -1,9 +1,15 @@
 extends CanvasLayer
-## Contextual action prompt — "[E] Talk" / "[E] Examine" near interactables.
-## Floats near the prop/agent in world space.
+## Contextual action prompt: the E keycap and the verb on a kit tooltip plate, floating over the agent's head or the prop.
+
+## World px above an agent's feet (clears the tallest 96 px avatar's head).
+const HEAD_CLEARANCE := 80.0
+## World px above a prop's origin.
+const PROP_CLEARANCE := 12.0
+## Screen px between the prompt plate and the agent's name label.
+const NAME_GAP := 2.0
 
 var panel: PanelContainer
-var label: RichTextLabel
+var label: Label
 var current_text: String = ""
 var target_alpha: float = 0.0
 
@@ -19,67 +25,64 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	panel = PanelContainer.new()
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-
-	var style := UITheme.panel_style()
-	style.set_border_width_all(1)
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 3
-	style.content_margin_bottom = 3
-	panel.add_theme_stylebox_override("panel", style)
-	panel.modulate.a = 0.0
+	panel.add_theme_stylebox_override("panel", UITheme.kit_style("tooltip", 3, 2))
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.visible = false
 
-	label = RichTextLabel.new()
-	label.bbcode_enabled = true
-	label.fit_content = true
-	label.scroll_active = false
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	label.add_theme_font_size_override("normal_font_size", 32)
-	label.add_theme_font_size_override("bold_font_size", 32)
-	label.add_theme_color_override("default_color", UITheme.TEXT)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 3)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var key := TextureRect.new()
+	key.texture = UITheme.keycap_texture("e")
+	key.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	key.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	key.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(key)
+
+	label = Label.new()
+	UITheme.ensure_fonts_loaded()
+	label.add_theme_font_override("font", UITheme.FONT_HUD)
+	label.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_HUD)
+	label.add_theme_color_override("font_color", UITheme.TEXT)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label)
 
-	panel.add_child(label)
+	panel.add_child(row)
 	add_child(panel)
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if not player:
 		return
-
 	if dialogue and dialogue.is_showing:
 		_set_text("")
-		panel.modulate.a = 0.0
 		return
 
 	var text := ""
 	var world_pos := Vector2.ZERO
-
+	var name_label: Control = null
 	if player.nearby_agent:
-		text = "[color=#%s]E[/color]  [color=#%s]%s[/color]" % [UITheme.ACCENT_HEX, UITheme.TEXT_HEX, Strings.get_string("action.talk").to_upper()]
-		world_pos = player.nearby_agent.global_position
+		text = Strings.get_string("action.talk").to_upper()
+		world_pos = player.nearby_agent.global_position - Vector2(0, HEAD_CLEARANCE)
+		name_label = player.nearby_agent.get_node_or_null("NameLabel") as Control
 	elif player.nearby_prop:
-		text = "[color=#%s]E[/color]  [color=#%s]%s[/color]" % [UITheme.ACCENT_HEX, UITheme.TEXT_HEX, Strings.get_string("action.examine").to_upper()]
-		world_pos = player.nearby_prop.global_position
-
+		text = Strings.get_string("action.examine").to_upper()
+		world_pos = player.nearby_prop.global_position - Vector2(0, PROP_CLEARANCE)
 	_set_text(text)
-	# Binary snap — pixel UI does not fade.
-	panel.modulate.a = 1.0 if text != "" else 0.0
-
-	if text != "":
-		var camera := get_viewport().get_camera_2d()
-		if camera:
-			var viewport_size := get_viewport().get_visible_rect().size
-			var screen_pos: Vector2 = (world_pos - camera.get_screen_center_position()) * camera.zoom + viewport_size * 0.5
-			# Snap to 2px grid so the prompt never sub-pixels.
-			var snapped := (screen_pos + Vector2(-30, -35))
-			snapped = (snapped / 2.0).round() * 2.0
-			panel.position = snapped
+	if text == "":
+		return
+	# Binary snap — pixel UI does not fade; whole pixels so the plate never shimmers.
+	panel.reset_size()
+	var xf := get_viewport().get_canvas_transform()
+	var screen: Vector2 = xf * world_pos
+	if name_label and name_label.visible:
+		screen.y = minf(screen.y, (xf * name_label.get_global_rect()).position.y - NAME_GAP)
+	panel.position = (screen - Vector2(panel.size.x * 0.5, panel.size.y)).round()
 
 
 func _set_text(text: String) -> void:
+	panel.visible = text != ""
 	if text != current_text:
 		current_text = text
 		label.text = text

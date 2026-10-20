@@ -3,10 +3,10 @@ extends RefCounted
 ## Gateways settings tab — add/edit/delete LLM gateway endpoints.
 
 const GATEWAY_TYPES := ["hermes", "openai", "openclaw", "anthropic"]
-const NAME_FIELD_WIDTH := 150
-const MODEL_FIELD_WIDTH := 200
-const DELETE_BUTTON_WIDTH := 90
-const DELETE_BUTTON_HEIGHT := 28
+const NAME_FIELD_WIDTH := 180
+const MODEL_FIELD_WIDTH := 160
+const DELETE_BUTTON_WIDTH := 64
+const DELETE_BUTTON_HEIGHT := 0
 
 var gateways_container: VBoxContainer
 var gateway_fields: Dictionary = {}
@@ -15,7 +15,7 @@ var gateway_fields: Dictionary = {}
 func build(parent: VBoxContainer) -> void:
 	parent.add_child(SettingsForm.section_header("settings.gateways"))
 	gateways_container = VBoxContainer.new()
-	gateways_container.add_theme_constant_override("separation", 10)
+	gateways_container.add_theme_constant_override("separation", 6)
 	for gw_id in GameState.gateways:
 		var gw_id_str: String = gw_id
 		var gw: Dictionary = GameState.gateways[gw_id_str]
@@ -46,24 +46,19 @@ func commit() -> void:
 
 func _add_gateway_panel(gw_id: String, gw: Dictionary) -> void:
 	var panel := PanelContainer.new()
-	var style := UITheme.panel_style()
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", UITheme.kit_style("panel", 10, 8))
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 5)
+	vbox.add_theme_constant_override("separation", 4)
 	var fields: Dictionary = {}
 
 	# Name row with delete button
 	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 8)
+	name_row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 	name_row.add_child(SettingsForm.form_label("settings.gateway_name"))
 	var name_field := LineEdit.new()
 	name_field.text = gw_id
-	name_field.add_theme_font_size_override("font_size", 32)
+	name_field.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	name_field.custom_minimum_size = Vector2(NAME_FIELD_WIDTH, 0)
 	name_row.add_child(name_field)
 	fields["name"] = name_field
@@ -80,10 +75,10 @@ func _add_gateway_panel(gw_id: String, gw: Dictionary) -> void:
 
 	# Type
 	var type_row := HBoxContainer.new()
-	type_row.add_theme_constant_override("separation", 8)
+	type_row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 	type_row.add_child(SettingsForm.form_label("settings.gateway_type"))
 	var type_opt := OptionButton.new()
-	type_opt.add_theme_font_size_override("font_size", 32)
+	type_opt.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	for i in range(GATEWAY_TYPES.size()):
 		type_opt.add_item(GATEWAY_TYPES[i])
 		if GATEWAY_TYPES[i] == gw.get("type", "openai"):
@@ -95,11 +90,11 @@ func _add_gateway_panel(gw_id: String, gw: Dictionary) -> void:
 	# Endpoint
 	var ep_row := HBoxContainer.new()
 	ep_row.name = "EndpointRow"
-	ep_row.add_theme_constant_override("separation", 8)
+	ep_row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 	ep_row.add_child(SettingsForm.form_label("settings.gateway_endpoint"))
 	var ep_field := LineEdit.new()
 	ep_field.text = gw.get("endpoint", "")
-	ep_field.add_theme_font_size_override("font_size", 32)
+	ep_field.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	ep_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ep_field.placeholder_text = Strings.get_string("settings.placeholder.hermes_endpoint")
 	ep_row.add_child(ep_field)
@@ -109,11 +104,11 @@ func _add_gateway_panel(gw_id: String, gw: Dictionary) -> void:
 	# API key
 	var key_row := HBoxContainer.new()
 	key_row.name = "ApiKeyRow"
-	key_row.add_theme_constant_override("separation", 8)
+	key_row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 	key_row.add_child(SettingsForm.form_label("settings.gateway_api_key"))
 	var key_field := LineEdit.new()
 	key_field.text = gw.get("api_key", "")
-	key_field.add_theme_font_size_override("font_size", 32)
+	key_field.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	key_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	key_field.secret = true
 	key_field.placeholder_text = Strings.get_string("settings.placeholder.openai_key")
@@ -130,11 +125,11 @@ func _add_gateway_panel(gw_id: String, gw: Dictionary) -> void:
 
 	# Model
 	var model_row := HBoxContainer.new()
-	model_row.add_theme_constant_override("separation", 8)
+	model_row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 	model_row.add_child(SettingsForm.form_label("settings.gateway_model"))
 	var model_field := LineEdit.new()
 	model_field.text = gw.get("model", "")
-	model_field.add_theme_font_size_override("font_size", 32)
+	model_field.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	model_field.custom_minimum_size = Vector2(MODEL_FIELD_WIDTH, 0)
 	model_field.placeholder_text = Strings.get_string("settings.placeholder.hermes_model")
 	model_row.add_child(model_field)

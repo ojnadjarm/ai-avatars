@@ -14,6 +14,9 @@ extends RefCounted
 ## Public callers (call_agent_to_player, call_all_agents_to_player, end_meeting)
 ## reach the helper through world_loader.menu_builder.
 
+## Wrap width of modal body text at the 640x360 base.
+const MODAL_TEXT_W := 260
+
 var world_loader: WorldLoader
 var _quit_dialog: CanvasLayer = null
 var _call_dialog: CanvasLayer = null
@@ -110,6 +113,7 @@ func show_quit_confirm() -> void:
 	text.add_theme_color_override("font_color", UITheme.TEXT)
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.custom_minimum_size = Vector2(MODAL_TEXT_W, 0)
 	body.add_child(text)
 
 	_quit_dialog = modal.layer
@@ -248,12 +252,16 @@ func _empty_agents_label() -> Label:
 	empty.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	empty.add_theme_color_override("font_color", UITheme.TEXT)
 	empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	empty.custom_minimum_size = Vector2(MODAL_TEXT_W, 0)
 	return empty
 
 
 func _meeting_picker_hint() -> Label:
 	var hint := Label.new()
 	hint.text = Strings.get_string("world.meeting_picker_hint")
+	UITheme.ensure_fonts_loaded()
+	hint.add_theme_font_override("font", UITheme.FONT_HUD)
 	hint.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_HUD)
 	hint.add_theme_color_override("font_color", UITheme.TEXT_DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -5,7 +5,10 @@ extends RefCounted
 ## back to world_loader (which agents use as their context for activity
 ## gates, room bounds, and LLM requests).
 
-const SPAWN_FAN_RADIUS := 60.0
+const SPAWN_FAN_RADIUS := 30.0
+const LABEL_WIDTH := 96.0
+const LABEL_HEIGHT := 10.0
+const LABEL_GAP := 2.0
 
 var world_loader: WorldLoader
 var agents_container: Node2D
@@ -55,7 +58,7 @@ func spawn_all(narration_log: CanvasLayer, on_arrive: Callable) -> void:
 		# Mark the visit AFTER on_arrive — request_arrive reads the
 		# pre-visit state to compute is_new for the prompt.
 		var spawned: Agent = find(agent_id)
-		if spawned and spawned.memory:
+		if spawned and spawned.memory and not WorldBuilder.offline:
 			spawned.memory.visit_location(config.get("id", ""))
 			spawned.memory.save_to_disk()
 	var current_location: String = config.get("id", "")
@@ -90,14 +93,11 @@ func _spawn_one(agent_id: String, info: Dictionary, index: int, total: int, narr
 	# is loaded from game_config.defaults inside Agent._load_defaults()
 	# which runs on _ready.
 
-	# Narrower width, top edge of the collision sits at y=0 (body origin).
-	var col_w: float = display_height * 0.50
-	var col_h: float = display_height * 0.70
+	# Feet circle at the body origin (the sprite pivot), so trunks and walls block the feet only.
 	var collision := CollisionShape2D.new()
-	var shape := RectangleShape2D.new()
-	shape.size = Vector2(col_w, col_h)
+	var shape := CircleShape2D.new()
+	shape.radius = WorldBuilder.FOOT_RADIUS
 	collision.shape = shape
-	collision.position = Vector2(0, -display_height * 0.3)
 	agent.add_child(collision)
 
 	var char_sprite := AnimatedSprite2D.new()
@@ -110,15 +110,21 @@ func _spawn_one(agent_id: String, info: Dictionary, index: int, total: int, narr
 
 	var label := Label.new()
 	label.text = GameState.str_safe(info, "display_name", agent_id)
-	label.add_theme_font_size_override("font_size", 32)
+	UITheme.ensure_fonts_loaded()
+	if UITheme.FONT_HUD != null:
+		label.add_theme_font_override("font", UITheme.FONT_HUD)
+	label.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_HUD)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size = Vector2(LABEL_WIDTH, LABEL_HEIGHT)
 	label.add_theme_color_override("font_color", UITheme.agent_color(agent_id))
 	label.add_theme_color_override("font_shadow_color", UITheme.LABEL_SHADOW)
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.name = "NameLabel"
-	# Pivot at the label's center so counter-scaling stays anchored on the agent.
-	label.pivot_offset = Vector2(30, 10)
-	label.position = Vector2(-30, -70)
+	# Pivot at the label's bottom centre so counter-scaling keeps it just above the head.
+	label.pivot_offset = Vector2(LABEL_WIDTH * 0.5, LABEL_HEIGHT)
+	var head: float = WorldBuilder.head_y(char_sprite, -display_height * 0.8)
+	label.position = Vector2(-LABEL_WIDTH * 0.5, roundf(head) - LABEL_GAP - LABEL_HEIGHT)
 	# Render the name above the canopy (canopy is z=10).
 	label.z_as_relative = false
 	label.z_index = 15

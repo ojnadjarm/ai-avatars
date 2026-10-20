@@ -18,6 +18,8 @@ const PlayerScript: GDScript = preload("res://scripts/player.gd")
 const ActionPromptScript: GDScript = preload("res://scripts/action_prompt.gd")
 const NarrationLogScript: GDScript = preload("res://scripts/narration_log.gd")
 const ControlsHintScript: GDScript = preload("res://scripts/controls_hint.gd")
+const ZoneBannerScript: GDScript = preload("res://scripts/hud/zone_banner.gd")
+const MinimapScript: GDScript = preload("res://scripts/hud/minimap.gd")
 
 var config: Dictionary = {}
 var llm: LLMClient
@@ -27,7 +29,12 @@ var agents_container: Node2D
 var props_container: Node2D
 var action_prompt: CanvasLayer
 var narration_log: CanvasLayer
+var zone_banner: CanvasLayer
+var minimap: CanvasLayer
+var _world_scene: Node2D
 var room_bounds: Rect2 = Rect2()
+# Parent of the player and the agents container: the world's y-sorted node, else self.
+var _depth_root: Node2D
 
 # Menu chrome + modal dialogs (quit confirm, call picker, meeting picker)
 # live in WorldMenuBuilder. world_loader delegates Esc handling, toast
@@ -101,9 +108,14 @@ var _meeting_ids_buf: Array[String] = []
 const LAYER_HUD: int = 1
 const LAYER_SIDEBAR: int = 2
 const LAYER_MENU: int = 10
+## Offline runs keep the activity gate shut so no observation or encounter prompt is ever sent.
+const OFFLINE_GATE_DELAY: float = 1e9
 
 
 func _ready() -> void:
+	var world_arg: String = _world_arg()
+	if world_arg != "":
+		room_config_path = "res://assets/worlds/%s/world.json" % world_arg
 	if room_config_path == "":
 		room_config_path = GameState.room_config_path
 	if room_config_path == "":
@@ -116,6 +128,9 @@ func _ready() -> void:
 	# observations and encounters wait. Gives the world a chance to settle
 	# and the player a beat before the first activity kicks off.
 	activity_gate.set_initial_delay(GameState.get_float("initial_activity_delay", 30.0))
+	if WorldBuilder.offline:
+		activity_gate.set_initial_delay(OFFLINE_GATE_DELAY)
+		print("[world] offline: no gateway traffic, no save writes")
 	var encounter_turns: int = int(GameState.get_default("encounter_turns", 3))
 	_setup_llm_client()
 	encounter_dispatcher = EncounterDispatcher.new(self, encounter_turns)
@@ -124,6 +139,10 @@ func _ready() -> void:
 	_setup_dialogue()
 	var world_scene: Node2D = WorldBuilder.instantiate_world(self, room_config_path.get_base_dir())
 	room_bounds = WorldBuilder.derive_bounds(world_scene)
+	_world_scene = world_scene
+	_depth_root = WorldBuilder.ysort_root(world_scene)
+	if _depth_root == null:
+		_depth_root = self
 	WorldBuilder.build_perimeter_walls(self, room_bounds, config)
 	if world_scene:
 		props_container = WorldBuilder.prepare_props(world_scene, config)
@@ -144,12 +163,21 @@ func _ready() -> void:
 	_setup_puzzle_layer()
 	_setup_save_timer()
 	_agent_spawner = AgentSpawner.new(self, agents_container, props_container, player, _character_height(), config)
-	_agent_spawner.spawn_all(narration_log, _llm_coordinator.request_arrive)
+	var on_arrive: Callable = (func(_id: String) -> void: pass) if WorldBuilder.offline else _llm_coordinator.request_arrive
+	_agent_spawner.spawn_all(narration_log, on_arrive)
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	# Bound LAST, after world_state/action_resolver and every agent exist, so
 	# an MCP tools/call arriving the instant the server is bound sees a fully
 	# ready world (find_agent works, submit_agent_action has a resolver).
 	McpServer.bind_world(self)
+
+
+## World id from a `-- --world=<id>` user arg, or "".
+static func _world_arg() -> String:
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--world="):
+			return arg.trim_prefix("--world=")
+	return ""
 
 
 func _exit_tree() -> void:
@@ -223,19 +251,13 @@ func _on_viewport_resized() -> void:
 	var camera := player.get_node_or_null("Camera2D") as Camera2D
 	if not camera:
 		return
-	var min_zoom: float = _min_camera_zoom()
-	if min_zoom <= 0.0:
-		return
-	# Clamp current zoom — if user was zoomed out further than the new min, snap up.
-	var z: float = maxf(camera.zoom.x, min_zoom)
+	var z: float = PixelZoom.snap(camera.zoom.x, _camera_zoom_levels())
 	camera.zoom = Vector2(z, z)
 
 
-func _min_camera_zoom() -> float:
-	if room_bounds.size == Vector2.ZERO:
-		return 0.0
-	var vp_size := get_viewport().get_visible_rect().size
-	return maxf(vp_size.x / room_bounds.size.x, vp_size.y / room_bounds.size.y)
+func _camera_zoom_levels() -> Array[float]:
+	var s: int = PixelZoom.stretch_factor(Vector2(get_window().size))
+	return PixelZoom.levels(s, PixelZoom.BASE_VIEW, room_bounds.size, GameState.get_float("camera_zoom_max_mult", 2.0))
 
 
 # ── Config ──
@@ -271,7 +293,8 @@ func _setup_dialogue() -> void:
 func _setup_agents_container() -> void:
 	agents_container = Node2D.new()
 	agents_container.name = "Agents"
-	add_child(agents_container)
+	agents_container.y_sort_enabled = true
+	_depth_root.add_child(agents_container)
 
 
 # ── Player ──
@@ -284,12 +307,18 @@ func _setup_player() -> void:
 	player.global_position = _resolve_player_spawn()
 	player.sprite_path = GameState.get_player_sprite_path()
 	player.display_height = player_h
-	player.agent_detect_range = player.display_height
+	player.agent_detect_range = GameState.get_float("agent_detect_range", player.agent_detect_range)
 	player.dialogue = dialogue
 	player.agents_container = agents_container
 	player.wants_to_talk.connect(_on_player_wants_to_talk)
 	player.wants_to_examine.connect(_on_player_wants_to_examine)
-	add_child(player)
+	_depth_root.add_child(player)
+	if _depth_root != self:
+		player.ysort_layer = _depth_root
+		for layer_name: String in ["Canopy", "Fg"]:
+			var layer := _depth_root.get_parent().get_node_or_null(layer_name) as Node2D
+			if layer:
+				player.front_layers.append(layer)
 	# Detection signals are wired AFTER add_child so the connection lives on
 	# an in-tree node — protects against any future Player._ready rebuild of
 	# the Area2D from silently dropping these slots.
@@ -318,13 +347,12 @@ func _setup_player_body() -> void:
 	# still physically blocks against agents, even though agents no longer
 	# collide with each other. Default `3` is the bit-OR of layers 1 and 2.
 	player.collision_mask = int(GameState.get_default("player_collision_mask", 3))
-	# Renders above agents (default z=0) and below canopy (z=10).
-	player.z_index = int(GameState.get_default("player_z_index", 5))
+	# Same z as the world's YSort so trees, props and avatars sort by their feet.
+	player.z_index = int(GameState.get_default("player_z_index", 0))
 	var body_col := CollisionShape2D.new()
 	body_col.name = "Collision"
-	var body_shape := RectangleShape2D.new()
-	var body_size: float = GameState.get_float("player_collision_size", 12.0)
-	body_shape.size = Vector2(body_size, body_size)
+	var body_shape := CircleShape2D.new()
+	body_shape.radius = WorldBuilder.FOOT_RADIUS
 	body_col.shape = body_shape
 	player.add_child(body_col)
 
@@ -350,9 +378,8 @@ func _setup_player_detection(player_h: float) -> Area2D:
 func _setup_player_camera() -> void:
 	var camera := Camera2D.new()
 	camera.name = "Camera2D"
-	# Start fully zoomed out — just enough to cover the viewport with the image.
-	var zoom_floor: float = GameState.get_float("camera_min_zoom_floor", 0.1)
-	var initial_zoom: float = maxf(_min_camera_zoom(), zoom_floor)
+	# Start at one 640x360 screen.
+	var initial_zoom: float = PixelZoom.snap(1.0, _camera_zoom_levels())
 	camera.zoom = Vector2(initial_zoom, initial_zoom)
 	# Camera staggering root cause: project.godot sets
 	# `common/physics_interpolation=true`, which means Godot's engine
@@ -395,16 +422,34 @@ func _setup_ui() -> void:
 	narration_log.name = "NarrationLog"
 	narration_log.layer = LAYER_SIDEBAR
 	narration_log.set_script(NarrationLogScript)
+	minimap = CanvasLayer.new()
+	minimap.name = "Minimap"
+	minimap.layer = LAYER_HUD
+	minimap.set_script(MinimapScript)
+	add_child(minimap)
+	if _world_scene:
+		minimap.setup(MinimapScript.ground_image(_world_scene), room_bounds, MinimapScript.read_zones(_world_scene), player, agents_container,
+				MinimapScript.ambient(_world_scene))
+	narration_log.top_offset = minimap.bottom() + 4
 	add_child(narration_log)
+	zone_banner = CanvasLayer.new()
+	zone_banner.name = "ZoneBanner"
+	zone_banner.layer = LAYER_HUD
+	zone_banner.set_script(ZoneBannerScript)
+	add_child(zone_banner)
+	if _world_scene:
+		zone_banner.watch_zones(_world_scene, player)
 	var controls_hint := CanvasLayer.new()
 	controls_hint.name = "ControlsHint"
 	controls_hint.layer = LAYER_HUD
 	controls_hint.set_script(ControlsHintScript)
+	controls_hint.dialogue = dialogue
 	controls_hint.hints = [
-		{"glyph": "\u2B8B", "font_size": UITheme.FONT_SIZE_HUD, "text": Strings.get_string("controls.zoom")},
+		{"cap": "wheel", "text": Strings.get_string("controls.zoom")},
 		{"mod": "Ctrl", "key": "L", "text": Strings.get_string("controls.toggle_log")},
-		{"glyph": "C", "text": Strings.get_string("world.call_agent")},
-		{"mod": "Shift", "key": "C", "text": Strings.get_string("world.summon_meeting")},
+		{"glyph": "C", "text": Strings.get_string("controls.call")},
+		{"mod": "Shift", "key": "C", "text": Strings.get_string("controls.meeting")},
+		{"glyph": "M", "text": Strings.get_string("controls.minimap")},
 	]
 	add_child(controls_hint)
 	menu_builder = WorldMenuBuilder.new(self)
@@ -690,7 +735,7 @@ func submit_agent_action(agent: Object, action: Dictionary, source: String, on_r
 ## synchronously (solve broadcasts per R15). Debounce interval is
 ## `defaults.world_state_save_debounce` (default 5s).
 func queue_world_state_save(force: bool) -> void:
-	if world_state == null:
+	if world_state == null or WorldBuilder.offline:
 		return
 	if force:
 		if _save_timer != null:

@@ -200,7 +200,10 @@ func _cleanup() -> void:
 
 func _test_invalid_world_id() -> bool:
 	## Invalid world_id → clean default with world_id == "", no file I/O.
+	print("EXPECTED ERROR (muted): Invalid world_id 'bad id!'")
+	Engine.print_error_messages = false
 	var ws: WorldState = WorldState.load_for("bad id!")
+	Engine.print_error_messages = true
 	if ws.world_id != "":
 		return _fail("invalid world_id: expected world_id == '', got '%s'" % ws.world_id)
 	if not ws.objects.is_empty():
@@ -349,7 +352,10 @@ func _test_ac_sl_05_corrupt_json() -> bool:
 	var wid := _world_id("sl05")
 	_write_raw(wid, '{"schema_version": 1, "objects": {TRUNCATED')
 
+	print("EXPECTED ERROR (muted): Parse JSON failed, corrupt save")
+	Engine.print_error_messages = false
 	var ws: WorldState = WorldState.load_for(wid)
+	Engine.print_error_messages = true
 	if not ws.objects.is_empty():
 		return _fail("AC-SL-05: objects not empty after corrupt load")
 	if not ws.flags.is_empty():
@@ -360,7 +366,10 @@ func _test_ac_sl_05_corrupt_json() -> bool:
 	## Empty file → same clean-init path.
 	var wid_empty := _world_id("sl05_empty")
 	_write_raw(wid_empty, "")
+	print("EXPECTED ERROR (muted): Parse JSON failed, empty save")
+	Engine.print_error_messages = false
 	var ws_empty: WorldState = WorldState.load_for(wid_empty)
+	Engine.print_error_messages = true
 	if not ws_empty.objects.is_empty() or not ws_empty.flags.is_empty():
 		return _fail("AC-SL-05: empty file did not produce clean default")
 	return true

@@ -105,6 +105,8 @@ var _player_camera: Camera2D = null
 # line-of-sight checks with node expansion — that requirement is not
 # something AStar2D exposes.
 var _nav_grid: Dictionary = {}
+## Walkable cells whose centre is blocked but an offset point inside the cell is clear (narrow decks): Vector2i → Vector2.
+var _cell_anchor: Dictionary = {}
 var _grid_origin: Vector2 = Vector2.ZERO
 var _grid_cell_size: float = 40.0
 var _grid_cols: int = 0
@@ -298,6 +300,7 @@ func _exit_tree() -> void:
 	_peer_in_proximity.clear()
 	_prop_in_range.clear()
 	_nav_grid.clear()
+	_cell_anchor.clear()
 	_flow_field.clear()
 	_excl_buf.clear()
 	_theta_g.clear()
@@ -308,7 +311,7 @@ func _exit_tree() -> void:
 	# Debounced saves may have queued state not yet written — flush before
 	# the agent (and its memory) is destroyed so nothing is lost on shutdown
 	# or world transition.
-	if memory:
+	if memory and not WorldBuilder.offline:
 		memory._flush_to_disk()
 
 
@@ -317,7 +320,7 @@ func _load_defaults() -> void:
 	# replan in the same time slice land on different physics frames.
 	# Offset in [0, _MIN_PLAN_INTERVAL) derived from the id hash.
 	_plan_phase_offset = float(absi(agent_id.hash()) % 100) / 100.0 * _MIN_PLAN_INTERVAL
-	move_speed = GameState.get_float("agent_move_speed", move_speed)
+	move_speed = WorldBuilder.walk_speed(get_node_or_null("CharSprite") as AnimatedSprite2D, GameState.get_float("agent_move_speed", move_speed))
 	observe_radius = GameState.get_float("observe_radius", observe_radius)
 	encounter_radius = GameState.get_float("encounter_radius", encounter_radius)
 	idle_decay_interval = GameState.get_float("idle_decay_interval", idle_decay_interval)
@@ -333,13 +336,12 @@ func _setup_navigation() -> void:
 	# a desired velocity each physics frame; the velocity_computed signal
 	# writes back a safe_velocity we apply next frame.
 	#
-	# Radius must fully encompass the collision rectangle (width =
-	# display_height * 0.5 in agent_spawner), otherwise the solver plans
-	# for a smaller body than physics enforces and agents jam mid-step.
-	# 0.3 gives a ~6px buffer around the collision half-width.
+	# Radius must fully encompass the feet circle (FOOT_RADIUS in
+	# agent_spawner), otherwise the solver plans for a smaller body than
+	# physics enforces and agents jam mid-step. 2x gives a 6px buffer.
 	nav_agent = NavigationAgent2D.new()
 	nav_agent.avoidance_enabled = true
-	nav_agent.radius = display_height * 0.3
+	nav_agent.radius = WorldBuilder.FOOT_RADIUS * 2.0
 	nav_agent.max_speed = move_speed * 1.5
 	nav_agent.neighbor_distance = 200.0
 	nav_agent.max_neighbors = 8
@@ -364,10 +366,11 @@ func _create_mood_popup() -> void:
 	# never overlap.
 	_mood_popup = Label.new()
 	_mood_popup.add_theme_font_override("font", UITheme.emoji_font())
-	_mood_popup.add_theme_font_size_override("font_size", 48)
+	_mood_popup.add_theme_font_size_override("font_size", 16)
 	_mood_popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_mood_popup.position = Vector2(-24, -display_height * 0.85)
-	_mood_popup.size = Vector2(48, 48)
+	_mood_popup.position = Vector2(-8, roundf(-display_height * 0.8) - 28)
+	_mood_popup.size = Vector2(16, 16)
+	_mood_popup.pivot_offset = Vector2(8, 8)
 	_mood_popup.modulate.a = 0.0
 	_mood_popup.z_as_relative = false
 	_mood_popup.z_index = 18
@@ -470,7 +473,8 @@ func _update_label_scale() -> void:
 	var zoom: float = _player_camera.zoom.x
 	if zoom <= 0.0:
 		return
-	var s: float = clampf(1.0 / zoom, 0.6, 3.0)
+	# Exactly 1/zoom: the label then draws at the integer stretch factor, so pixel fonts stay crisp.
+	var s: float = 1.0 / zoom
 	label.scale = Vector2(s, s)
 
 
@@ -760,7 +764,7 @@ func _segment_is_clear(a: Vector2, b: Vector2) -> bool:
 		_cast_query.shape = _cast_shape
 		_cast_query.collide_with_bodies = true
 		_cast_query.collide_with_areas = false
-	_cast_shape.radius = maxf(12.0, display_height * 0.3)
+	_cast_shape.radius = WorldBuilder.FOOT_RADIUS
 	_cast_query.transform = Transform2D(0.0, a)
 	_cast_query.motion = b - a
 	_cast_query.exclude = _dynamic_body_exclusions()
@@ -1753,11 +1757,12 @@ func _build_nav_grid() -> void:
 	# 1-cell wall corner).
 	if _room_max == Vector2.ZERO:
 		return
-	var probe_radius: float = maxf(12.0, display_height * 0.3)
+	var t0: int = Time.get_ticks_usec()
+	var probe_radius: float = WorldBuilder.FOOT_RADIUS
 	# Grid cell size controls Theta* search cost quadratically: doubling
 	# the cell size drops cell count 4× and path-expansion cost along
-	# with it. 2.2× probe gives ~27×20=540 cells (was 44×33=1452) while
-	# still being fine enough for top-down agent navigation. Any path
+	# with it. 2.2× the feet probe gives 13.2 px cells (191×107 on a
+	# 2560×1440 map, ~20 ms per agent) that keep forest gaps open. Any path
 	# accuracy lost is absorbed by RVO avoidance at walk time.
 	_grid_cell_size = probe_radius * 2.2
 	_grid_origin = _room_min
@@ -1776,21 +1781,42 @@ func _build_nav_grid() -> void:
 	query.exclude = _dynamic_body_exclusions()
 
 	_nav_grid.clear()
+	_cell_anchor.clear()
+	var shift: float = _grid_cell_size * 0.25
+	var offsets: Array[Vector2] = [Vector2(0, shift), Vector2(0, -shift), Vector2(shift, 0), Vector2(-shift, 0)]
 	for y in range(_grid_rows):
 		for x in range(_grid_cols):
 			var cell := Vector2i(x, y)
 			var center: Vector2 = _grid_cell_center(cell)
 			query.transform = Transform2D(0.0, center)
-			var hits := space.intersect_shape(query, 1)
-			if hits.is_empty():
+			if space.intersect_shape(query, 1).is_empty():
 				_nav_grid[cell] = true
-	print("[agent:%s] nav grid %dx%d cell=%.1f walkable=%d" % [
-		display_name, _grid_cols, _grid_rows, _grid_cell_size, _nav_grid.size(),
+				continue
+			# A bridge deck can be narrower than a cell: retry at offsets when the wall is at least probe - shift away.
+			shape.radius = probe_radius - shift
+			var near_edge: bool = space.intersect_shape(query, 1).is_empty()
+			shape.radius = probe_radius
+			if not near_edge:
+				continue
+			for off: Vector2 in offsets:
+				query.transform = Transform2D(0.0, center + off)
+				if space.intersect_shape(query, 1).is_empty():
+					_nav_grid[cell] = true
+					_cell_anchor[cell] = center + off
+					break
+	print("[agent:%s] nav grid %dx%d cell=%.1f walkable=%d anchored=%d %.0fms" % [
+		display_name, _grid_cols, _grid_rows, _grid_cell_size, _nav_grid.size(), _cell_anchor.size(),
+		(Time.get_ticks_usec() - t0) / 1000.0,
 	])
 
 
 func _grid_cell_center(c: Vector2i) -> Vector2:
 	return _grid_origin + (Vector2(c) + Vector2(0.5, 0.5)) * _grid_cell_size
+
+
+## Walk point of a cell: its anchor when the centre is blocked, else the centre.
+func _cell_point(c: Vector2i) -> Vector2:
+	return _cell_anchor.get(c, _grid_cell_center(c))
 
 
 func _cell_neighbors(c: Vector2i) -> Array[Vector2i]:
@@ -1915,11 +1941,9 @@ func _theta_star(
 	#         g(n) = new_g; parent(n) = new_parent
 	#         push n into open with priority new_g + h(n, goal)
 	#
-	# The LOS check is Bresenham-based and purely over the walkable
-	# grid — fast (O(max(dx,dy)) dict lookups, no physics queries)
-	# and safe because the grid was built with a body-sized probe,
-	# so any Bresenham line that stays inside _nav_grid cells is
-	# traversable by the body at walking speed.
+	# LOS is a cheap Bresenham walk over the walkable grid, confirmed
+	# by a feet-circle sweep (_segment_is_clear); fallback steps get the
+	# same sweep, so no link cuts a wall corner.
 	#
 	# Open-list priority queue: flat array, linear-scan min. Grid
 	# sizes here are small (≤ a few hundred cells) so the O(n) pop
@@ -1940,9 +1964,8 @@ func _theta_star(
 	_theta_g[start_cell] = 0.0
 	_theta_parent[start_cell] = start_cell
 	_heap_push_parallel(_theta_open_f, _theta_open_cell, _cell_distance(start_cell, goal_cell), start_cell)
-	# Hard expansion cap — pathological unreachable goals would
-	# otherwise walk the full grid. 300 is plenty on the 540-cell grid.
-	var max_expansions: int = 300
+	# Hard expansion cap: every walkable cell once, so cross-map paths on the big feet grid still resolve.
+	var max_expansions: int = _nav_grid.size()
 	var expansions: int = 0
 	while not _theta_open_cell.is_empty():
 		var current: Vector2i = _heap_pop_parallel(_theta_open_f, _theta_open_cell)
@@ -1985,12 +2008,15 @@ func _theta_star(
 				continue
 			var new_g: float
 			var new_parent: Vector2i
-			if _cell_los(current_parent, neighbor, blocked):
+			if _cell_los(current_parent, neighbor, blocked) \
+					and _segment_is_clear(_cell_point(current_parent), _cell_point(neighbor)):
 				new_g = float(_theta_g[current_parent]) + _cell_distance(current_parent, neighbor)
 				new_parent = current_parent
-			else:
+			elif _segment_is_clear(_cell_point(current), _cell_point(neighbor)):
 				new_g = float(_theta_g[current]) + _cell_distance(current, neighbor)
 				new_parent = current
+			else:
+				continue
 			if new_g < float(_theta_g.get(neighbor, INF)):
 				_theta_g[neighbor] = new_g
 				_theta_parent[neighbor] = new_parent
@@ -2063,19 +2089,28 @@ func _theta_reconstruct(
 	# each link in the chain is already any-angle — no smoothing
 	# pass is necessary.
 	var reversed: Array[Vector2] = []
-	reversed.append(goal_world)
+	var goal_point: Vector2 = _cell_point(goal)
+	var before_goal: Vector2 = _cell_point(parent.get(goal, goal))
+	# The goal cell's point joins the chain when the last link to the raw goal would clip a wall.
+	if _segment_is_clear(before_goal, goal_world):
+		reversed.append(goal_world)
+	elif _segment_is_clear(goal_point, goal_world):
+		reversed.append(goal_world)
+		reversed.append(goal_point)
+	else:
+		reversed.append(goal_point)
 	var cursor: Vector2i = goal
 	while true:
 		var p: Vector2i = parent.get(cursor, cursor)
 		if p == cursor:
 			break
-		reversed.append(_grid_cell_center(p))
+		reversed.append(_cell_point(p))
 		cursor = p
-	# Drop the final start-cell-center if it's right next to the
-	# agent — the agent is already there.
+	# Drop the start cell's point when the agent is beside it and can head straight for the next one.
 	if reversed.size() > 1:
 		var last: Vector2 = reversed[reversed.size() - 1]
-		if last.distance_squared_to(start_world) < (_grid_cell_size * 0.6) * (_grid_cell_size * 0.6):
+		if last.distance_squared_to(start_world) < (_grid_cell_size * 0.6) * (_grid_cell_size * 0.6) \
+				and _segment_is_clear(start_world, reversed[reversed.size() - 2]):
 			reversed.remove_at(reversed.size() - 1)
 	var forward: Array[Vector2] = []
 	for i in range(reversed.size() - 1, -1, -1):
@@ -2194,7 +2229,7 @@ func _flow_step_waypoint(from_pos: Vector2) -> Vector2:
 		cursor_dist = best_dist
 	if cursor == start_cell:
 		return from_pos
-	return _grid_cell_center(cursor)
+	return _cell_point(cursor)
 
 
 func _collect_blocker_cells() -> Dictionary:

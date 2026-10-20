@@ -401,7 +401,10 @@ func _test_handle_jsonrpc_tools_call_populates_neutral_call_dict() -> bool:
 
 func _test_parse_jsonrpc_malformed_json_returns_parse_error() -> bool:
 	# Arrange / Act
+	print("EXPECTED ERROR (muted): Parse JSON failed, malformed JSON-RPC")
+	Engine.print_error_messages = false
 	var outcome: Dictionary = McpProtocol.parse_jsonrpc("{this is not json")
+	Engine.print_error_messages = true
 
 	# Assert
 	if bool(outcome.get("ok", true)):

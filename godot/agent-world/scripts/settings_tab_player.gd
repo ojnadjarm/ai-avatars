@@ -2,14 +2,15 @@ class_name SettingsTabPlayer
 extends RefCounted
 ## Player settings tab — avatar picker grid + content folder paths.
 
-const PORTRAIT_SIZE := Vector2(64, 64)
-const GRID_COLUMNS := 5
-const FIELD_LABEL_WIDTH := 130
+const PORTRAIT_SIZE := Vector2(96, 96)
+const GRID_COLUMNS := 4
+const FIELD_LABEL_WIDTH := SettingsForm.LABEL_WIDTH
+const BROWSE_W := 64
 
 var owner_node: CanvasLayer
 var available_sprites: Array = []
 
-var _player_cells: Array = []  # [{container, style}]
+var _player_cells: Array = []  # [{container, label}]
 var _player_selected_idx: int = -1
 
 var content_folder_field: LineEdit
@@ -34,12 +35,19 @@ func commit() -> void:
 
 # ── Avatar grid ──
 
+## strings.json "avatar.<id>" when present, else the sheet id.
+static func _display_name(sprite_id: String) -> String:
+	var key := "avatar." + sprite_id
+	var shown := Strings.get_string(key)
+	return sprite_id if shown == key else shown
+
+
 func _build_avatar_section(parent: VBoxContainer) -> void:
 	parent.add_child(SettingsForm.section_header("settings.player_avatar"))
 	var grid := GridContainer.new()
 	grid.columns = GRID_COLUMNS
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
 	for i in range(available_sprites.size()):
 		var sprite_info: Dictionary = available_sprites[i]
 		grid.add_child(_make_avatar_cell(sprite_info, i))
@@ -51,35 +59,32 @@ func _build_avatar_section(parent: VBoxContainer) -> void:
 
 func _make_avatar_cell(sprite_info: Dictionary, idx: int) -> PanelContainer:
 	var panel := PanelContainer.new()
-	var normal_style := StyleBoxFlat.new()
-	normal_style.bg_color = UITheme.CELL_BG
-	normal_style.set_corner_radius_all(UITheme.CORNER)
-	normal_style.set_border_width_all(UITheme.BORDER_W)
-	normal_style.border_color = UITheme.BORDER
-	normal_style.content_margin_left = 4
-	normal_style.content_margin_right = 4
-	normal_style.content_margin_top = 4
-	normal_style.content_margin_bottom = 4
-	panel.add_theme_stylebox_override("panel", normal_style)
+	panel.add_theme_stylebox_override("panel", UITheme.kit_style("panel_dim", 4, 4))
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 2)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var portrait: TextureRect = GameState.load_portrait_for_sprite(sprite_info, PORTRAIT_SIZE)
+	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(portrait)
 
 	var name_label := Label.new()
-	name_label.text = sprite_info["name"]
-	name_label.add_theme_font_size_override("font_size", 32)
+	name_label.text = _display_name(String(sprite_info["name"])).to_upper()
+	UITheme.ensure_fonts_loaded()
+	name_label.add_theme_font_override("font", UITheme.FONT_HUD)
+	name_label.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_HUD)
 	name_label.add_theme_color_override("font_color", UITheme.TEXT_DIM)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.clip_text = true
+	name_label.custom_minimum_size = Vector2(PORTRAIT_SIZE.x, 0)
 	vbox.add_child(name_label)
 
 	panel.add_child(vbox)
 	panel.gui_input.connect(_on_cell_input.bind(idx))
 	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_player_cells.append({"container": panel, "style": normal_style})
+	_player_cells.append({"container": panel, "label": name_label})
 	return panel
 
 
@@ -99,8 +104,9 @@ func _select_avatar(idx: int) -> void:
 func _highlight_cell(idx: int, selected: bool) -> void:
 	if idx < 0 or idx >= _player_cells.size():
 		return
-	var style: StyleBoxFlat = _player_cells[idx]["style"]
-	style.border_color = UITheme.ACCENT if selected else UITheme.BORDER
+	var cell: Dictionary = _player_cells[idx]
+	(cell["container"] as PanelContainer).add_theme_stylebox_override("panel", UITheme.kit_style("portrait_frame" if selected else "panel_dim", 4, 4))
+	(cell["label"] as Label).add_theme_color_override("font_color", UITheme.ACCENT if selected else UITheme.TEXT_DIM)
 
 
 # ── Content paths ──
@@ -108,42 +114,34 @@ func _highlight_cell(idx: int, selected: bool) -> void:
 func _build_paths_section(parent: VBoxContainer) -> void:
 	parent.add_child(SettingsForm.section_header("settings.content_paths"))
 	var paths_vbox := VBoxContainer.new()
-	paths_vbox.add_theme_constant_override("separation", 8)
+	paths_vbox.add_theme_constant_override("separation", 4)
 
 	content_folder_field = _make_path_row(paths_vbox, "settings.content_folder", GameState.content_folder)
 	characters_folder_field = _make_path_row(paths_vbox, "settings.characters_folder", GameState.characters_folder)
 
-	var hint := Label.new()
-	hint.text = Strings.get_string("settings.path_hint")
-	hint.add_theme_font_size_override("font_size", 32)
-	hint.add_theme_color_override("font_color", UITheme.TEXT_DIM)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	paths_vbox.add_child(hint)
+	paths_vbox.add_child(SettingsForm.hint(Strings.get_string("settings.path_hint")))
 
 	parent.add_child(paths_vbox)
 
 
 func _make_path_row(parent: VBoxContainer, label_key: String, current_value: String) -> LineEdit:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 
-	var lbl := Label.new()
-	lbl.text = Strings.get_string(label_key).to_upper()
-	lbl.add_theme_font_size_override("font_size", 32)
-	lbl.add_theme_color_override("font_color", UITheme.TEXT_DIM)
+	var lbl := SettingsForm.form_label(label_key)
 	lbl.custom_minimum_size = Vector2(FIELD_LABEL_WIDTH, 0)
 	row.add_child(lbl)
 
 	var field := LineEdit.new()
 	field.text = current_value
-	field.add_theme_font_size_override("font_size", 32)
+	field.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	field.placeholder_text = Strings.get_string("settings.placeholder.path")
 	row.add_child(field)
 
 	var browse := UITheme.action_button(Strings.get_string("settings.browse"))
 	browse.size_flags_horizontal = Control.SIZE_SHRINK_END
-	browse.custom_minimum_size = Vector2(90, 28)
+	browse.custom_minimum_size = Vector2(BROWSE_W, 0)
 	browse.pressed.connect(_open_dir_dialog.bind(field))
 	row.add_child(browse)
 
@@ -156,7 +154,7 @@ func _open_dir_dialog(target_field: LineEdit) -> void:
 	dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
 	dialog.title = Strings.get_string("settings.browse").to_upper()
-	dialog.min_size = Vector2i(600, 400)
+	dialog.min_size = Vector2i(560, 300)
 	if target_field.text != "":
 		dialog.current_dir = target_field.text
 	dialog.dir_selected.connect(func(dir: String): target_field.text = dir)

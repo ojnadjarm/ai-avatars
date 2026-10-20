@@ -1,29 +1,22 @@
 class_name ThoughtBubble
 extends Node2D
-## Small status cloud above an agent's head. For now, blink() shows an animated
-## three-dot "thinking" pulse. Kept intentionally generic — future agent status
-## (happy, sleeping, confused, ...) can extend this with set_status(kind).
+## Pixel thought cloud above an agent's head: blink() shows a three-dot "thinking" pulse.
+## Kept generic — future agent status (happy, sleeping, ...) can extend this with set_status(kind).
 
-const BODY_WIDTH: float = 60.0
-const BODY_HEIGHT: float = 28.0
-const CORNER_RADIUS: float = 12.0
+const BODY := Vector2i(24, 13)
+## World px from the node (placed by agent.gd) up to the cloud's lowest tail blob, clearing the head.
+const LIFT := 22
 const DISPLAY_TIME: float = 6.0
 const FADE_IN: float = 0.2
 const FADE_OUT: float = 0.35
 
-# Three bouncing dots, typing-indicator style.
 const DOT_COUNT: int = 3
-const DOT_RADIUS: float = 3.0
-const DOT_SPACING: float = 10.5
+const DOT_SPACING: int = 6
 const PULSE_CYCLE: float = 1.2     # seconds for one full bounce cycle
 const PULSE_PHASE: float = 0.18    # offset between dots so they stagger
-const DOT_Y_LIFT: float = 3.5      # pixels the dot lifts at peak
 
-# Cloud tail trailing down toward the agent's head.
-const TAIL_DOTS := [
-	{"offset": Vector2(5.0, 5.5), "radius": 3.6},
-	{"offset": Vector2(10.5, 13.5), "radius": 2.1},
-]
+# Tail blobs trailing down toward the head: [x, y from the cloud's bottom, size].
+const TAIL := [[-3, 2, 3], [-6, 6, 2]]
 
 var _remaining: float = 0.0
 var _time: float = 0.0
@@ -73,31 +66,26 @@ func _hide() -> void:
 
 
 func _draw() -> void:
-	var body_rect := Rect2(Vector2(-BODY_WIDTH * 0.5, -BODY_HEIGHT), Vector2(BODY_WIDTH, BODY_HEIGHT))
-	_fill_rounded_rect(body_rect.grow(1.0), CORNER_RADIUS + 1.0, UITheme.THOUGHT_BUBBLE_BORDER)
-	_fill_rounded_rect(body_rect, CORNER_RADIUS, UITheme.THOUGHT_BUBBLE_BG)
-
-	# Three bouncing dots, centered in the body.
-	var dots_total_width: float = DOT_SPACING * float(DOT_COUNT - 1)
-	var center_y: float = -BODY_HEIGHT * 0.5
+	var bottom := -LIFT - 8
+	var body := Rect2i(Vector2i(-BODY.x / 2, bottom - BODY.y), BODY)
+	_blob(body, 3)
+	for t: Array in TAIL:
+		_blob(Rect2i(t[0], bottom + t[1], t[2], t[2]), 0)
+	var cy: int = body.position.y + BODY.y / 2 - 1
+	var x0: int = -DOT_SPACING * (DOT_COUNT - 1) / 2 - 1
 	for i in DOT_COUNT:
-		var dot_x: float = -dots_total_width * 0.5 + float(i) * DOT_SPACING
 		var phase: float = fposmod(_time - float(i) * PULSE_PHASE, PULSE_CYCLE) / PULSE_CYCLE
-		var lift: float = maxf(0.0, sin(phase * PI)) * DOT_Y_LIFT
-		draw_circle(Vector2(dot_x, center_y - lift), DOT_RADIUS, UITheme.THOUGHT_BUBBLE_DOT)
-
-	# Trailing cloud dots below the body.
-	for tail in TAIL_DOTS:
-		var o: Vector2 = tail["offset"]
-		var r: float = tail["radius"]
-		draw_circle(o, r + 1.0, UITheme.THOUGHT_BUBBLE_BORDER)
-		draw_circle(o, r, UITheme.THOUGHT_BUBBLE_BG)
+		var lift: int = 1 if phase < 0.5 else 0
+		draw_rect(Rect2(x0 + i * DOT_SPACING, cy - lift, 2, 2), UITheme.THOUGHT_BUBBLE_DOT)
 
 
-func _fill_rounded_rect(rect: Rect2, radius: float, color: Color) -> void:
-	draw_rect(Rect2(rect.position + Vector2(radius, 0), Vector2(rect.size.x - radius * 2.0, rect.size.y)), color)
-	draw_rect(Rect2(rect.position + Vector2(0, radius), Vector2(rect.size.x, rect.size.y - radius * 2.0)), color)
-	draw_circle(rect.position + Vector2(radius, radius), radius, color)
-	draw_circle(rect.position + Vector2(rect.size.x - radius, radius), radius, color)
-	draw_circle(rect.position + Vector2(radius, rect.size.y - radius), radius, color)
-	draw_circle(rect.position + Vector2(rect.size.x - radius, rect.size.y - radius), radius, color)
+## Pixel-rounded box: 1 px outline, corners cut by `cut` px stair steps.
+func _blob(r: Rect2i, cut: int) -> void:
+	for pass_i in 2:
+		var grow: int = 1 - pass_i
+		var color: Color = UITheme.THOUGHT_BUBBLE_BORDER if pass_i == 0 else UITheme.THOUGHT_BUBBLE_BG
+		var rr := r.grow(grow)
+		for y in rr.size.y:
+			var edge: int = mini(y, rr.size.y - 1 - y)
+			var inset: int = maxi(0, cut - edge) if cut > 0 else (1 if edge == 0 and rr.size.x > 2 else 0)
+			draw_rect(Rect2(rr.position.x + inset, rr.position.y + y, rr.size.x - inset * 2, 1), color)

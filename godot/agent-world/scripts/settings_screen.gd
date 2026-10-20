@@ -1,9 +1,10 @@
 extends CanvasLayer
-## Settings screen orchestrator — wallpaper, frame, tab container, Save/Back.
+## Settings screen orchestrator — backdrop, frame, tab container, Save/Back.
 ## Every tab lives in its own file (settings_tab_*.gd); this screen just
 ## composes them and coordinates the save flow.
 
 const SELECTOR_SCENE := "res://scenes/room_selector.tscn"
+const BUTTON_W := 72
 
 var available_sprites: Array = []
 var status_label: Label
@@ -26,132 +27,103 @@ func _ready() -> void:
 
 # ── Main UI ──
 
-func _build_ui() -> void:
-	UITheme.wallpaper_background(self, true)
+const FRAME_MARGIN := 10
 
-	# Outer margin — leaves room around the framed settings panel.
+var tabs: TabContainer
+
+
+func _build_ui() -> void:
+	UITheme.wallpaper_background(self)
+
 	var margin := MarginContainer.new()
 	margin.anchor_right = 1.0
 	margin.anchor_bottom = 1.0
-	margin.add_theme_constant_override("margin_left", 60)
-	margin.add_theme_constant_override("margin_right", 60)
-	margin.add_theme_constant_override("margin_top", 30)
-	margin.add_theme_constant_override("margin_bottom", 30)
+	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, FRAME_MARGIN)
 	add_child(margin)
 
-	# Framed panel — dark bg, 2px purple border (same chrome as the Edit sidebar).
 	var frame := PanelContainer.new()
+	frame.name = "Frame"
 	frame.add_theme_stylebox_override("panel", UITheme.framed_panel_style())
 	margin.add_child(frame)
 
 	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 14)
+	outer.add_theme_constant_override("separation", 4)
 	frame.add_child(outer)
 
-	# Title
+	# Title row: title, save status, Save + Back.
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 6)
 	var title := Label.new()
 	title.text = Strings.get_string("settings.title").to_upper()
-	title.add_theme_font_size_override("font_size", 48)
+	UITheme.ensure_fonts_loaded()
+	if UITheme.FONT_TITLE != null:
+		title.add_theme_font_override("font", UITheme.FONT_TITLE)
+	title.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_TITLE)
 	title.add_theme_color_override("font_color", UITheme.ACCENT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	outer.add_child(title)
+	title.add_theme_color_override("font_shadow_color", UITheme.LABEL_SHADOW_HEAVY)
+	top_row.add_child(title)
 
-	# Save + Back row
-	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 8)
+	status_label = Label.new()
+	status_label.add_theme_font_override("font", UITheme.FONT_HUD)
+	status_label.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_HUD)
+	status_label.add_theme_color_override("font_color", UITheme.TOAST_SUCCESS)
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top_row.add_child(status_label)
+
 	var save_btn := UITheme.primary_button(Strings.get_string("settings.save"))
+	save_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	save_btn.custom_minimum_size.x = BUTTON_W
 	save_btn.pressed.connect(_on_save)
 	top_row.add_child(save_btn)
 	var back_btn := UITheme.primary_button(Strings.get_string("settings.back"))
+	back_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	back_btn.custom_minimum_size.x = BUTTON_W
 	back_btn.pressed.connect(_on_back)
 	top_row.add_child(back_btn)
 	outer.add_child(top_row)
+	outer.add_child(HSeparator.new())
 
-	var sep := HSeparator.new()
-	sep.add_theme_stylebox_override("separator", UITheme.line_style())
-	outer.add_child(sep)
-
-	# Tabbed content — one ScrollContainer per tab.
-	var tabs := TabContainer.new()
+	# Tabbed content — one ScrollContainer per tab; styles come from the kit theme.
+	tabs = TabContainer.new()
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_style_tab_container(tabs)
+	tabs.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	_add_tab(tabs, "settings.tab_player", _tab_player.build)
 	_add_tab(tabs, "settings.tab_gateways", _tab_gateways.build)
 	_add_tab(tabs, "settings.tab_agents", _tab_agents.build)
 	_add_tab(tabs, "settings.tab_world", _tab_world.build)
 	outer.add_child(tabs)
 
-	# Status label below tabs.
-	status_label = Label.new()
-	status_label.add_theme_font_size_override("font_size", 32)
-	status_label.add_theme_color_override("font_color", UITheme.TEXT_DIM)
-	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	outer.add_child(status_label)
 
-	UITheme.attach_arcane_corners(frame)
+## Opens a tab by index (the UI demo shows each one).
+func select_tab(index: int) -> void:
+	if tabs:
+		tabs.current_tab = clampi(index, 0, tabs.get_tab_count() - 1)
 
 
-func _style_tab_container(tabs: TabContainer) -> void:
-	# Flat tab bar — no shadows, no borders, just bg-color distinction.
-	# Selected tab reads as active through the cyan font color alone.
-	tabs.add_theme_font_size_override("font_size", 32)
-	tabs.add_theme_color_override("font_selected_color", UITheme.SECTION)
-	tabs.add_theme_color_override("font_unselected_color", UITheme.TEXT_DIM)
-	tabs.add_theme_color_override("font_hovered_color", UITheme.TEXT)
-
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = UITheme.TAB_BG
-	panel_style.set_corner_radius_all(UITheme.CORNER)
-	panel_style.content_margin_left = 4
-	panel_style.content_margin_right = 4
-	panel_style.content_margin_top = 4
-	panel_style.content_margin_bottom = 4
-	tabs.add_theme_stylebox_override("panel", panel_style)
-
-	var selected := StyleBoxFlat.new()
-	selected.bg_color = UITheme.TAB_SELECTED_BG
-	selected.set_corner_radius_all(UITheme.CORNER)
-	selected.content_margin_left = 14
-	selected.content_margin_right = 14
-	selected.content_margin_top = 6
-	selected.content_margin_bottom = 6
-	tabs.add_theme_stylebox_override("tab_selected", selected)
-
-	var unselected := selected.duplicate()
-	unselected.bg_color = UITheme.TAB_TRANSPARENT
-	tabs.add_theme_stylebox_override("tab_unselected", unselected)
-
-	var hovered := selected.duplicate()
-	hovered.bg_color = UITheme.TAB_HOVERED_BG
-	tabs.add_theme_stylebox_override("tab_hovered", hovered)
-
-	var tabbar_bg := StyleBoxFlat.new()
-	tabbar_bg.bg_color = UITheme.TAB_TRANSPARENT
-	tabs.add_theme_stylebox_override("tabbar_background", tabbar_bg)
-
-
-func _add_tab(tabs: TabContainer, title_key: String, builder: Callable) -> void:
-	# Each tab is a ScrollContainer wrapping a padded VBox. Builder is
-	# called with the inner VBox so it only adds its own rows.
+func _add_tab(tab_host: TabContainer, title_key: String, builder: Callable) -> void:
+	# Each tab is a ScrollContainer wrapping a padded VBox; the builder only adds its own rows.
 	var scroll := ScrollContainer.new()
 	scroll.name = Strings.get_string(title_key).to_upper()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
+	margin.add_theme_constant_override("margin_left", 4)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
+	vbox.add_theme_constant_override("separation", 6)
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	builder.call(vbox)
 	margin.add_child(vbox)
 	scroll.add_child(margin)
-	tabs.add_child(scroll)
+	tab_host.add_child(scroll)
 
 
 # ── Save / Back ──

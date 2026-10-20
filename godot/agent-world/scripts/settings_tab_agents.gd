@@ -2,14 +2,14 @@ class_name SettingsTabAgents
 extends RefCounted
 ## Agents settings tab — per-agent config panels with an avatar picker.
 
-const GRID_COLUMNS := 5
-const AGENT_PORTRAIT_SIZE := Vector2(160, 160)
-const PICKER_CELL_SIZE := Vector2(48, 48)
-const ID_FIELD_WIDTH := 150
-const DELETE_BUTTON_WIDTH := 90
-const DELETE_BUTTON_HEIGHT := 28
-const CHANGE_BUTTON_WIDTH := 180
-const CHANGE_BUTTON_HEIGHT := 32
+const GRID_COLUMNS := 4
+const AGENT_PORTRAIT_SIZE := Vector2(96, 96)
+const PICKER_CELL_SIZE := Vector2(96, 96)
+const ID_FIELD_WIDTH := 180
+const DELETE_BUTTON_WIDTH := 64
+const DELETE_BUTTON_HEIGHT := 0
+const CHANGE_BUTTON_WIDTH := 120
+const CHANGE_BUTTON_HEIGHT := 0
 
 ## Fallback when defaults.mcp.port is absent (a user://game_config.json
 ## override saved before the MCP feature shipped) — mirrors mcp_server.gd's
@@ -34,7 +34,7 @@ func _init(sprites: Array) -> void:
 func build(parent: VBoxContainer) -> void:
 	parent.add_child(SettingsForm.section_header("settings.agents"))
 	agents_config_container = VBoxContainer.new()
-	agents_config_container.add_theme_constant_override("separation", 10)
+	agents_config_container.add_theme_constant_override("separation", 6)
 	for aid in GameState.agents:
 		var agent_id: String = aid
 		var cfg: Dictionary = GameState.agents[agent_id]
@@ -79,23 +79,18 @@ func commit() -> Dictionary:
 
 func _add_agent_panel(agent_id: String, cfg: Dictionary) -> void:
 	var panel := PanelContainer.new()
-	var style := UITheme.panel_style()
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", UITheme.kit_style("panel", 10, 8))
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 4)
 
 	# Header row: ID field + delete button
 	var header_row := HBoxContainer.new()
-	header_row.add_theme_constant_override("separation", 8)
+	header_row.add_theme_constant_override("separation", SettingsForm.ROW_SEP)
 	header_row.add_child(SettingsForm.form_label("settings.agent_id"))
 	var id_field := LineEdit.new()
 	id_field.text = agent_id
-	id_field.add_theme_font_size_override("font_size", 32)
+	id_field.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_BODY)
 	id_field.add_theme_color_override("font_color", UITheme.ACCENT)
 	id_field.custom_minimum_size = Vector2(ID_FIELD_WIDTH, 0)
 	header_row.add_child(id_field)
@@ -126,11 +121,7 @@ func _add_agent_panel(agent_id: String, cfg: Dictionary) -> void:
 	# or a hand-edited config) reads as unchecked, matching
 	# GameState.is_agent_mcp's own empty-safe default.
 	fields["mcp"] = SettingsForm.check_row(vbox, "settings.agent_mcp", cfg.get("mcp", false))
-	var mcp_hint := Label.new()
-	mcp_hint.text = _mcp_hint_text(agent_id)
-	mcp_hint.add_theme_font_size_override("font_size", 32)
-	mcp_hint.add_theme_color_override("font_color", UITheme.TEXT_DIM)
-	mcp_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var mcp_hint := SettingsForm.hint(_mcp_hint_text(agent_id))
 	vbox.add_child(mcp_hint)
 	# Endpoint URL is keyed on the agent ID, which lives in a sibling field
 	# the user can rename — keep the hint in sync as they type instead of
@@ -195,7 +186,7 @@ func _build_avatar_row(parent: VBoxContainer, agent_id: String) -> void:
 	# Vertical stack: big centered portrait (only when one exists), Change/Select
 	# button underneath, hidden picker grid below that (toggled by the button).
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 6)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 

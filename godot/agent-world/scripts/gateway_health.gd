@@ -62,6 +62,8 @@ func _process(delta: float) -> void:
 
 func _tick_all() -> void:
 	_refresh_interval()
+	if WorldBuilder.offline:
+		return
 	var gateways: Dictionary = GameState.gateways
 	for gw_id in gateways.keys():
 		_ping(String(gw_id), gateways[gw_id])

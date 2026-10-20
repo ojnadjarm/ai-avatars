@@ -29,10 +29,10 @@
   "dialogue.placeholder": "Say something...",
   "dialogue.send": ">",
   "dialogue.close": "x",
-  "dialogue.expand": "⬆ Expand",
-  "dialogue.collapse": "⬇ Retract",
+  "dialogue.expand": "Expand",
+  "dialogue.collapse": "Retract",
   "dialogue.end_meeting_btn": "End Meeting",
-  "dialogue.stats_btn": "♥ Stats",
+  "dialogue.stats_btn": "Stats",
   "dialogue.conversation_start": "Started a conversation...",
   "dialogue.while_you_were_away": "... while you were away ...",
   "dialogue.you": "You",
@@ -63,8 +63,12 @@
   "action.talk": "Talk",
   "action.examine": "Examine",
 
-  "controls.zoom": "Scroll to zoom",
-  "controls.toggle_log": "Toggle world log",
+  "controls.run": "Run",
+  "controls.zoom": "Zoom",
+  "controls.toggle_log": "Log",
+  "controls.call": "Call",
+  "controls.meeting": "Meeting",
+  "controls.minimap": "Map",
 
   "narration.title": "World Log",
 
@@ -89,6 +93,7 @@
   "settings.saved": "Settings saved",
 
   "settings.player_avatar": "Player Avatar",
+  "avatar.player_default": "Wanderer",
   "settings.change_sprite": "Change Avatar",
   "settings.select_sprite": "Select Avatar",
   "settings.agent_avatar": "Avatar",

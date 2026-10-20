@@ -95,7 +95,7 @@ var _last_call_msec: Dictionary[String, int] = {}
 # ── Virtual methods ──────────────────────────────────────────────────────
 
 func _ready() -> void:
-	if not _configured_enabled():
+	if not _configured_enabled() or WorldBuilder.offline:
 		set_process(false)
 		return
 	_port = _configured_port()

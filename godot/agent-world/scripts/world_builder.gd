@@ -21,6 +21,51 @@ extends RefCounted
 ## "props" array and "spawn" dict shapes the legacy flat format had, so
 ## agents, the puzzle layer, and prompt building stay format-agnostic.
 
+## Feet collision radius shared by the player, agents, the nav grid, reach.py and the world validator.
+const FOOT_RADIUS := 6.0
+
+## True under `-- --offline` or AIW_OFFLINE=1 (tests, renders, soaks): no gateway traffic, no save writes.
+static var offline: bool = "--offline" in OS.get_cmdline_user_args() or OS.get_environment("AIW_OFFLINE") == "1"
+
+
+## Walk speed that keeps the planted foot still: the layout's walk step_px x walk fps, else fallback.
+static func walk_speed(sprite: AnimatedSprite2D, fallback: float) -> float:
+	if sprite == null or sprite.sprite_frames == null or not sprite.sprite_frames.has_animation("walk_right"):
+		return fallback
+	var layout: Variant = sprite.get("layout")
+	if not (layout is Dictionary):
+		return fallback
+	var spec: Variant = ((layout as Dictionary).get("anims", {}) as Dictionary).get("walk_right")
+	if not (spec is Dictionary) or not (spec as Dictionary).has("step_px"):
+		return fallback
+	return float(spec["step_px"]) * sprite.sprite_frames.get_animation_speed("walk_right")
+
+
+## Head top (highest opaque pixel of idle_down frame 0) relative to the body origin, else fallback.
+static func head_y(sprite: AnimatedSprite2D, fallback: float) -> float:
+	if sprite == null or sprite.sprite_frames == null or not sprite.sprite_frames.has_animation("idle_down"):
+		return fallback
+	var atlas := sprite.sprite_frames.get_frame_texture("idle_down", 0) as AtlasTexture
+	if atlas == null or atlas.atlas == null:
+		return fallback
+	var sheet: Texture2D = atlas.atlas
+	if sheet is CanvasTexture:
+		sheet = (sheet as CanvasTexture).diffuse_texture
+	var img: Image = sheet.get_image() if sheet else null
+	if img == null or img.is_empty():
+		return fallback
+	var used: Rect2i = img.get_region(Rect2i(atlas.region)).get_used_rect()
+	if not used.has_area():
+		return fallback
+	return sprite.position.y + (float(used.position.y) + sprite.offset.y) * sprite.scale.y
+
+
+## The world's y-sorted node (world_art ysort_root()), or null for worlds without one.
+static func ysort_root(world_scene: Node2D) -> Node2D:
+	if world_scene == null or not world_scene.has_method("ysort_root"):
+		return null
+	return world_scene.call("ysort_root") as Node2D
+
 
 ## Instantiate <world_dir>/world.tscn under root and apply configured
 ## z-indexes. Returns null (with an error) when the scene is missing.

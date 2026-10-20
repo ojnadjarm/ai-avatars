@@ -197,7 +197,7 @@ func scan_available_sprites() -> Array:
 		dir.list_dir_begin()
 		var file_name := dir.get_next()
 		while file_name != "":
-			if file_name.ends_with(".png") and not file_name.ends_with("_portrait.png"):
+			if file_name.ends_with(".png") and not is_sheet_companion(file_name):
 				var display := file_name.get_basename()
 				if not seen.has(display):
 					seen[display] = true
@@ -210,6 +210,15 @@ func scan_available_sprites() -> Array:
 			file_name = dir.get_next()
 	sprites.sort_custom(func(a, b): return a["name"] < b["name"])
 	return sprites
+
+
+const SHEET_COMPANION_SUFFIXES := ["_n", "_e", "_g"]
+
+
+## True for a sheet's normal, emissive, glow or portrait PNG (not a sheet itself).
+static func is_sheet_companion(file_name: String) -> bool:
+	var base := file_name.get_basename()
+	return base.contains("_portrait") or SHEET_COMPANION_SUFFIXES.any(func(s): return base.ends_with(s))
 
 
 # ── Agent Sprites ──
@@ -309,11 +318,12 @@ func load_texture(path: String) -> Texture2D:
 			return cached
 		_texture_cache.erase(path)
 	var tex: Texture2D = null
-	if path.begins_with("res://"):
+	if path.begins_with("res://") and ResourceLoader.exists(path):
 		tex = load(path) as Texture2D
 	else:
-		var img := Image.new()
-		if img.load(path) != OK:
+		var file_path := ProjectSettings.globalize_path(path) if path.begins_with("res://") else path
+		var img := Image.load_from_file(file_path)
+		if img == null:
 			push_warning("[config] Cannot load texture: %s" % path)
 			return null
 		tex = ImageTexture.create_from_image(img)
@@ -337,11 +347,9 @@ func load_portrait_texture(sprite_path: String) -> Texture2D:
 	idle frame from the spritesheet. Returns null if neither is available."""
 	if sprite_path == "":
 		return null
-	var portrait_path: String = sprite_path.replace(".png", "_portrait.png")
-	if FileAccess.file_exists(portrait_path):
-		var tex: Texture2D = load_texture(portrait_path)
-		if tex:
-			return tex
+	var strip: Array[Texture2D] = load_portrait_frames(sprite_path)
+	if not strip.is_empty():
+		return strip[0]
 	if not FileAccess.file_exists(sprite_path):
 		return null
 	var full: Texture2D = load_texture(sprite_path)
@@ -356,6 +364,27 @@ func load_portrait_texture(sprite_path: String) -> Texture2D:
 	return atlas
 
 
+## Portrait strip frames (talk, blink, open mouth, signature); a single portrait image gives one frame.
+func load_portrait_frames(sprite_path: String) -> Array[Texture2D]:
+	var out: Array[Texture2D] = []
+	var portrait_path: String = sprite_path.get_basename() + "_portrait.png"
+	if sprite_path == "" or not FileAccess.file_exists(portrait_path):
+		return out
+	var tex: Texture2D = load_texture(portrait_path)
+	if not tex:
+		return out
+	var side: int = tex.get_height()
+	if tex.get_width() < side * 2:
+		out.append(tex)
+		return out
+	for i in tex.get_width() / side:
+		var atlas := AtlasTexture.new()
+		atlas.atlas = tex
+		atlas.region = Rect2(i * side, 0, side, side)
+		out.append(atlas)
+	return out
+
+
 func load_agent_portrait_texture(agent_id: String) -> Texture2D:
 	"""Convenience: agent_id → resolved sprite path → portrait texture."""
 	if agent_id == "":
@@ -365,12 +394,18 @@ func load_agent_portrait_texture(agent_id: String) -> Texture2D:
 
 
 static func make_portrait_rect(tex: Texture2D, size: Vector2) -> TextureRect:
-	"""Wrap a texture in a fixed-size TextureRect used by portrait cells."""
+	"""Wrap a texture in a TextureRect at the largest integer scale that fits `size` (nearest filter)."""
 	var r := TextureRect.new()
 	r.custom_minimum_size = size
 	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	r.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	r.texture = tex
+	if tex and tex.get_width() > 0 and tex.get_height() > 0:
+		var k: int = maxi(1, floori(minf(size.x / tex.get_width(), size.y / tex.get_height())))
+		r.custom_minimum_size = tex.get_size() * k
 	return r
 
 

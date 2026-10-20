@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Agent World"
 run/main_scene="res://scenes/room_selector.tscn"
-config/features=PackedStringArray("4.4", "GL Compatibility")
+config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -24,15 +24,21 @@ GatewayHealth="*res://scripts/gateway_health.gd"
 
 [display]
 
+window/size/viewport_width=640
+window/size/viewport_height=360
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+window/stretch/mode="canvas_items"
+window/stretch/scale_mode="integer"
 window/vsync/vsync_mode=0
 
 [gui]
 
-theme/custom_font="res://assets/fonts/m5x7.ttf"
+theme/custom_font="res://assets/fonts/PixelifySans.ttf"
 theme/default_font_antialiasing=0
 theme/default_font_hinting=0
 theme/default_font_subpixel_positioning=0
-theme/default_font_size=32
+theme/default_font_size=16
 
 [input]
 
@@ -45,5 +51,15 @@ interact={
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="forward_plus"
+viewport/hdr_2d=false
+environment/glow/upscale_mode=0
+2d/snap/snap_2d_transforms_to_pixel=true
+
+[shader_globals]
+
+loop_phase={
+"type": "float",
+"value": 0.0
+}

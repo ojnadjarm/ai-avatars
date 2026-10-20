@@ -12,9 +12,7 @@ extends CanvasLayer
 ## Esc handlers (dialogue_cloud, world_loader) can check is_any_open() and
 ## yield — the modal always wins Esc while visible.
 
-const PANEL_MIN := Vector2(780, 560)
-const TITLE_FONT := 48
-const BODY_FONT := 32
+const PANEL_SIZE := Vector2(560, 312)
 
 static var _open_count: int = 0
 
@@ -45,46 +43,52 @@ func _build(title_text: String, entries: Array[String]) -> void:
 	add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.framed_panel_style())
-	panel.custom_minimum_size = PANEL_MIN
+	panel.name = "LogPanel"
+	panel.add_theme_stylebox_override("panel", UITheme.kit_style("modal", UITheme.PAD_FRAMED_X, UITheme.PAD_FRAMED_Y))
+	panel.custom_minimum_size = PANEL_SIZE
 	center.add_child(panel)
 
 	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 10)
+	outer.add_theme_constant_override("separation", 4)
 	panel.add_child(outer)
 
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 10)
+	header.add_theme_constant_override("separation", 6)
 
 	var title := Label.new()
 	title.text = title_text.to_upper()
-	title.add_theme_font_size_override("font_size", TITLE_FONT)
+	UITheme.ensure_fonts_loaded()
+	if UITheme.FONT_TITLE != null:
+		title.add_theme_font_override("font", UITheme.FONT_TITLE)
+	title.add_theme_font_size_override("font_size", UITheme.FONT_SIZE_TITLE)
 	title.add_theme_color_override("font_color", UITheme.ACCENT)
+	title.add_theme_color_override("font_shadow_color", UITheme.LABEL_SHADOW_HEAVY)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.clip_text = true
 	header.add_child(title)
 
-	var close_btn := UITheme.small_menu_button(Strings.get_string("log_modal.close"))
+	var close_btn := UITheme.action_button(Strings.get_string("log_modal.close"))
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	header.add_child(close_btn)
 	outer.add_child(header)
-
-	var sep := HSeparator.new()
-	sep.add_theme_stylebox_override("separator", UITheme.line_style())
-	outer.add_child(sep)
+	outer.add_child(HSeparator.new())
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(PANEL_MIN.x - 40, PANEL_MIN.y - 120)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 
 	var log_label := RichTextLabel.new()
 	log_label.bbcode_enabled = true
 	log_label.fit_content = true
 	log_label.scroll_active = false
+	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	log_label.add_theme_font_size_override("normal_font_size", BODY_FONT)
-	log_label.add_theme_font_size_override("bold_font_size", BODY_FONT)
-	log_label.add_theme_font_size_override("italics_font_size", BODY_FONT)
+	for key: String in ["normal_font_size", "bold_font_size", "italics_font_size"]:
+		log_label.add_theme_font_size_override(key, UITheme.FONT_SIZE_BODY)
 	log_label.add_theme_color_override("default_color", UITheme.TEXT)
+	log_label.add_theme_constant_override("paragraph_separation", 4)
+	log_label.add_theme_constant_override("line_separation", 0)
 
 	if entries.is_empty():
 		log_label.text = "[color=#%s]%s[/color]" % [UITheme.TEXT_DIM_HEX, Strings.get_string("log_modal.empty")]
@@ -93,8 +97,6 @@ func _build(title_text: String, entries: Array[String]) -> void:
 
 	scroll.add_child(log_label)
 	outer.add_child(scroll)
-
-	UITheme.attach_arcane_corners(panel)
 
 	close_btn.pressed.connect(_close)
 	backdrop.gui_input.connect(func(ev: InputEvent) -> void:

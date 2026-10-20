@@ -1,6 +1,6 @@
 extends CanvasLayer
-## Room selector — lists the scene-based worlds bundled under
-## assets/worlds/<id>/ (world.tscn + world.json sidecar pairs).
+## Main menu: the T704 title hosted in an HDR SubViewport, listing the worlds
+## bundled under assets/worlds/<id>/ (world.tscn + world.json sidecar pairs).
 
 const WORLD_SCENE := "res://scenes/world.tscn"
 const SETTINGS_SCENE := "res://scenes/settings_screen.tscn"
@@ -8,10 +8,25 @@ const WORLDS_ROOT := "res://assets/worlds/"
 
 var rooms: Array = []
 
+@onready var title: Node = $Screen/View/Title
+@onready var screen: SubViewportContainer = $Screen
+@onready var view: SubViewport = $Screen/View
+
 
 func _ready() -> void:
 	_scan_rooms()
-	_build_ui()
+	_build_menu()
+	_fit()
+	get_tree().root.size_changed.connect(_fit)
+
+
+## Renders the 640x360 title at the window's integer scale so its glow and sub-pixel parallax match T704.
+func _fit() -> void:
+	var win: Vector2i = get_tree().root.size
+	var k: int = maxi(1, mini(win.x / 640, win.y / 360))
+	view.size = Vector2i(640, 360) * k
+	screen.size = Vector2(640, 360) * k
+	screen.scale = Vector2.ONE / k
 
 
 func _scan_rooms() -> void:
@@ -36,59 +51,28 @@ func _scan_rooms() -> void:
 	print("[selector] Found %d rooms" % rooms.size())
 
 
-func _build_ui() -> void:
-	UITheme.wallpaper_background(self)
-
-	# Center layout (shifted down so the wallpaper title stays visible)
-	var center := CenterContainer.new()
-	center.anchor_right = 1.0
-	center.anchor_bottom = 1.0
-	center.offset_top = 150
-	add_child(center)
-
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.framed_panel_style())
-	panel.custom_minimum_size = Vector2(420, 0)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-
-	# Title
-	var title := Label.new()
-	title.text = Strings.get_string("room_selector.title").to_upper()
-	title.add_theme_font_size_override("font_size", 48)
-	title.add_theme_color_override("font_color", UITheme.ACCENT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-
-	if rooms.is_empty():
-		var empty := Label.new()
-		empty.text = Strings.get_string("room_selector.no_rooms", {"dir": Strings.get_string("default.worlds_dir")})
-		empty.add_theme_color_override("font_color", UITheme.TEXT_DIM)
-		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(empty)
-	else:
-		for room: Dictionary in rooms:
-			var play_btn := UITheme.primary_button(room["name"])
-			play_btn.pressed.connect(_on_room_selected.bind(room["path"]))
-			vbox.add_child(play_btn)
-
-	# Separator
-	var sep := HSeparator.new()
-	sep.add_theme_stylebox_override("separator", UITheme.line_style())
-	vbox.add_child(sep)
-
-	# Settings button — full width so the menu reads as one vertical column.
-	var settings_btn := UITheme.primary_button(Strings.get_string("settings.title"))
-	settings_btn.pressed.connect(_on_settings_pressed)
-	vbox.add_child(settings_btn)
-
-	panel.add_child(vbox)
-	center.add_child(panel)
-	UITheme.attach_arcane_corners(panel)
+func _build_menu() -> void:
+	var names: Array = []
+	for room: Dictionary in rooms:
+		names.append(room["name"])
+	names.append(Strings.get_string("settings.title"))
+	names.append("Quit")
+	var menu: Node = title.menu
+	menu.set_items(names)
+	menu.set_online_text("%d AGENTS CONFIGURED" % GameState.agents.size())
+	menu.confirmed.connect(_on_confirmed)
 
 
 # ── Navigation ──
+
+
+func _on_confirmed(index: int) -> void:
+	if index < rooms.size():
+		_on_room_selected(rooms[index]["path"])
+	elif index == rooms.size():
+		_on_settings_pressed()
+	else:
+		get_tree().quit()
 
 
 func _on_room_selected(path: String) -> void:

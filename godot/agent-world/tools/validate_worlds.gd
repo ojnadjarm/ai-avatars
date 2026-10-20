@@ -65,7 +65,7 @@ func _validate_world(world_dir: String) -> void:
 		_error("world.tscn root is not a Node2D")
 		return
 
-	var bounds: Rect2 = _scene_bounds(scene_root)
+	var bounds: Rect2 = _scene_bounds(scene_root, world_dir)
 	if bounds.size == Vector2.ZERO:
 		_error("no Ground TileMapLayer or Background sprite — bounds underivable")
 
@@ -74,7 +74,7 @@ func _validate_world(world_dir: String) -> void:
 	scene_root.free()
 
 
-func _scene_bounds(scene_root: Node2D) -> Rect2:
+func _scene_bounds(scene_root: Node2D, world_dir: String) -> Rect2:
 	var ground := scene_root.get_node_or_null("Ground") as TileMapLayer
 	if ground and ground.tile_set:
 		var tile_px := Vector2(ground.tile_set.tile_size)
@@ -87,6 +87,16 @@ func _scene_bounds(scene_root: Node2D) -> Rect2:
 		if canopy and canopy.texture and canopy.texture.get_size() != size:
 			_error("canopy size %s != background size %s" % [canopy.texture.get_size(), size])
 		return Rect2(background.position, size)
+	return _built_bounds(world_dir)
+
+
+## Painterly worlds whose Background is textured at runtime: the ground node of art/built.json.
+func _built_bounds(world_dir: String) -> Rect2:
+	var built: Dictionary = _load_json(world_dir + "art/built.json")
+	for n: Variant in built.get("nodes", []):
+		if n is Dictionary and str(n.get("layer", "")) == "ground":
+			var size: Array = built.get("size", [0, 0])
+			return Rect2(float(n["x"]), float(n["y"]), float(size[0]), float(size[1]))
 	return Rect2()
 
 
